@@ -1,0 +1,10 @@
+build/
+Logs/
+Temp/
+.utmp/
+.vs/
+.vsconfig
+*.sln
+Packages/
+**.apk
+**.csproj
