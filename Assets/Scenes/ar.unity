@@ -162,6 +162,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 58130e4a8f4a7cd40971cd71a1c35b50, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  enableDistanceControl: 1
 --- !u!1 &140856203
 GameObject:
   m_ObjectHideFlags: 0
@@ -2273,7 +2274,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9ea68851c7abf7c4299138370254b4f9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  objectToSpawn: {fileID: 0}
 --- !u!65 &1437829128
 BoxCollider:
   m_ObjectHideFlags: 0
