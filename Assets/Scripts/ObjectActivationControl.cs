@@ -4,8 +4,11 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using System.IO;
-
+using System;
+using AR.Parser;
+using AR;
 namespace AR.ActivationControl {
+    
 
     public class AR3DObjectStorage
     {
@@ -163,6 +166,8 @@ namespace AR.ActivationControl {
                     {
                         connectionGraph[i].Add(j);
                         connectionGraph[j].Add(i);
+                        UnityEngine.Debug.Log($"{i} {j} are collapsing.");
+
                     }
                 }
             }
@@ -186,6 +191,8 @@ namespace AR.ActivationControl {
                     }
                 }
             }
+            UnityEngine.Debug.Log($"all visit {visited.Count == indexes.Count()}");
+
             return visited.Count == indexes.Count();
         }
 
@@ -225,6 +232,10 @@ namespace AR.ActivationControl {
             return collapsing.Contains((objectIndex1 << 16) | objectIndex2) || collapsing.Contains((objectIndex2 << 16) | objectIndex1);
         }
     }
+    
+    
+    
+
 
     public class ObjectActivationControl : MonoBehaviour
     {
@@ -232,71 +243,32 @@ namespace AR.ActivationControl {
         public static ActivationConfiguration activationConfiguration { get; private set; } = ActivationConfiguration.Instance;
         public static CollisionConfiguration collisionConfiguration { get; private set; } = CollisionConfiguration.Instance;
         public static Dictionary<string, GameObject> gameObjectCaching = new Dictionary<string, GameObject>();
+        public static List<ConnectionGraphCluster> activationConfigurationGraphCluster = null;
 
-        private static Dictionary<int, List<List<int>>> connectionRecognizationConfiguration = new Dictionary<int, List<List<int>>>();
 
 
-        
         static ObjectActivationControl() {
             string objectConfigurationPath = "Assets/Configurations/objects.config";
             string connectionTrackingConfigurationPath = "Assets/Configurations/connectionRecognization.config";
+
+
             string[] objectNames = File.ReadAllLines(objectConfigurationPath).Select(line => line.Trim()).ToArray();
 
-            List<List<int>> ParseStateSetupConfigurationLineItems(string items)
-            {
-                int parsingState = 0;
-                List<List<int>> result = new List<List<int>>();
-                List<int> currentParsingConfiguration = new List<int>();
-                StringBuilder currentParsingString = new StringBuilder();
-                for (int i = 0; i < items.Length; i++)
-                {
-                    char ch = items[i];
-                    if (parsingState == 0)
-                    {
-                        if (ch == '[') { 
-                                parsingState = 1;
-                                currentParsingConfiguration = new List<int>();
-                                break;
-                        }
-                    }
-                    else if (parsingState == 1)
-                    {
-                        if (ch > '0' && ch < '9')
-                        {
-                            currentParsingString.Append(ch);
-                        }else if (ch == ',')
-                        {
-                            currentParsingConfiguration!.Add(int.Parse(currentParsingString.ToString()));
-                            currentParsingString.Clear();
-                        }else if (ch == ']')
-                        {
-                            currentParsingConfiguration!.Add(int.Parse(currentParsingString.ToString()));
-                            currentParsingString.Clear();
-                            result.Add(currentParsingConfiguration);
-                            currentParsingConfiguration = null;
-                            parsingState = 0;
-                        }
-                    }
-                }
-                return result;
+            List<ConnectionGraph> connectionGraphs = AR.Parser.ConfigurationParser.LoadConnectionConfiguration(connectionTrackingConfigurationPath);
+            UnityEngine.Debug.Log($"Parse configuration graph end..Items count = {connectionGraphs.Count}");
 
-            };
+            UnityEngine.Debug.Log($"build configuration graph begin..");
 
-            connectionRecognizationConfiguration = 
-                File.ReadAllLines(connectionTrackingConfigurationPath).Select(line =>
-                {
-                    int firstSpacePosition = line.ToString().IndexOf(" ");
-                    var key = line[..firstSpacePosition];
-                    var value = ParseStateSetupConfigurationLineItems(line[(firstSpacePosition + 1)..]);
-                    return (key: int.Parse(key), value: value);
-                }).ToDictionary(kv => kv.key, kv => kv.value);
+            activationConfigurationGraphCluster = ConnectionGraphCluster.ClusteringConnectionGraph(connectionGraphs);
 
+            UnityEngine.Debug.Log($"read configuration graph end..{activationConfigurationGraphCluster}");
             foreach (string objectName in objectNames) {
                 activationConfiguration.RecordNewObject(objectName, false);
             }
 
-            // connectionRecognizationConfiguration.Add(2, new List<List<int>>() { new List<int>() { 0, 1 } });
         }
+
+        
 
         public static void UpdateConfiguration(string objectName, bool isActivated)
         {
@@ -354,28 +326,42 @@ namespace AR.ActivationControl {
 
             /* create a configuration file. describe what should us to in each configuration. */
             var newConfiguration = new StringBuilder(configuration);
-            foreach(int bitId in connectionRecognizationConfiguration.Keys)
+            foreach(ConnectionGraphCluster cluster in activationConfigurationGraphCluster)
             {
-                var connectionLists = connectionRecognizationConfiguration[bitId];
-                bool connected = false;
-                foreach(var connectionList in connectionLists)
+                bool activated = true;
+                int activateObject = -1;
+                for (int innerClusterGraphId = 0; innerClusterGraphId < cluster.graphs.Count(); innerClusterGraphId++)
                 {
-                    if (collisionConfiguration.ConnectionCheck(connectionList))
+                    activated = true;
+                    activateObject = cluster.graphs[innerClusterGraphId].activateObjectID;
+                    foreach (var edge in cluster.graphs[innerClusterGraphId].edges)
                     {
-                        connected = true;
+                        if (collisionConfiguration.IsCollapsing(edge.vertex1, edge.vertex2))
+                        {
+                            continue;
+                        }
+                        else
+                        {
+                            activated = false;
+                            break;
+                        }
+                    }
+                    if (activated)
+                    {
+                        UnityEngine.Debug.Log($"set {activateObject}-th bit to 1");
+                        newConfiguration[activateObject] = '1';
                         break;
                     }
+                    else
+                    {
+                        newConfiguration[activateObject] = '0';
+                    }
                 }
-                if (bitId >= 0 && bitId < newConfiguration.Length)  // Added bounds check for safety
-                {
-                    newConfiguration[bitId] = connected ? '1' : '0';
-                }
-                else
-                {
-                    UnityEngine.Debug.LogError($"bitId {bitId} is out of range.");
-                }
-            }
 
+                if (activated) continue;
+
+            }
+            UnityEngine.Debug.Log($"Align to configuration {newConfiguration.ToString()}");
             AlignToConfiguration(newConfiguration.ToString());
         }
 

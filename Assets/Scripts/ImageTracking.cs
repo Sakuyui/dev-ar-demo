@@ -63,7 +63,7 @@ namespace AR
             }
             else
             {
-                BackButton.gameObject.SetActive(false);
+                // BackButton.gameObject.SetActive(false);
             }
         }
 
