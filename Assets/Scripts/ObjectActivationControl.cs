@@ -7,6 +7,7 @@ using System.IO;
 using System;
 using AR.Parser;
 using AR;
+using System.ComponentModel.Design;
 namespace AR.ActivationControl {
     
 
@@ -90,12 +91,9 @@ namespace AR.ActivationControl {
 
         public void SetActivationState(string objectName, bool isActivated)
         {
-            UnityEngine.Debug.Log($"Try setting {objectName} to " + (isActivated ? "active" : "inactive") + " in configuration.");
-
             dirty = true;
             if (AR3DObjectStorage.Instance.HasObject(objectName))
             {
-                UnityEngine.Debug.Log($"Set {objectName} to " + (isActivated ? "active": "inactive") + " in configuration.");
                 configuration[AR3DObjectStorage.Instance[objectName]].activated = isActivated;
             }
         }
@@ -219,7 +217,15 @@ namespace AR.ActivationControl {
             collapsing.Remove((objectIndex2 << 16) | objectIndex1);
             UnityEngine.Debug.Log($"unset obj:{objectIndex1} and obj:{objectIndex2} collided.");
         }
-
+        public void RemoveCollision(int objectIndex1)
+        {
+            var deleteConfigurations = 
+                collapsing.Where(key => (key & ((1 << 16) - 1)) == objectIndex1 || ((key >> 16) & ((1 << 16) - 1)) == objectIndex1).ToList();
+            foreach(var config in deleteConfigurations)
+            {
+                collapsing.Remove(config);
+            }
+        }
         public void RemoveCollision(string objectName1, string objectName2)
         {
             int objectIndex1 = AR3DObjectStorage.Instance[objectName1];
@@ -273,6 +279,7 @@ namespace AR.ActivationControl {
         public static void UpdateConfiguration(string objectName, bool isActivated)
         {
             activationConfiguration.SetActivationState(objectName, isActivated);
+            
         }
 
         public static void AddCollision(int object1Index, int object2Index)
@@ -312,7 +319,7 @@ namespace AR.ActivationControl {
                 bool active = c == '1' ? true : false;
                 activationConfiguration.SetActivationState(i, active);
                 string objectName = AR3DObjectStorage.Instance[i];
-                UnityEngine.Debug.Log($" - Object Name = {objectName}");
+                // UnityEngine.Debug.Log($" - Object Name = {objectName}");
                 GameObject gameObject = FindFirstObjectWithTagName(objectName);
                 gameObject.SetActive(active);
             }
@@ -336,7 +343,10 @@ namespace AR.ActivationControl {
                     activateObject = cluster.graphs[innerClusterGraphId].activateObjectID;
                     foreach (var edge in cluster.graphs[innerClusterGraphId].edges)
                     {
-                        if (collisionConfiguration.IsCollapsing(edge.vertex1, edge.vertex2))
+                        bool isColliding = collisionConfiguration.IsCollapsing(edge.vertex1, edge.vertex2);
+                        UnityEngine.Debug.Log($"{edge.vertex1}-{edge.vertex2} isColliding = {isColliding}");
+
+                        if (isColliding)
                         {
                             continue;
                         }
@@ -354,11 +364,12 @@ namespace AR.ActivationControl {
                     }
                     else
                     {
+                        UnityEngine.Debug.Log($"unset {activateObject}-th bit");
+
                         newConfiguration[activateObject] = '0';
                     }
                 }
 
-                if (activated) continue;
 
             }
             UnityEngine.Debug.Log($"Align to configuration {newConfiguration.ToString()}");

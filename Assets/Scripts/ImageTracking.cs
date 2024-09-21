@@ -17,8 +17,7 @@ namespace AR
         public Button BackButton;
 
         private Dictionary<ImageTargetController, bool> imageTargetControllers = new Dictionary<ImageTargetController, bool>();
-        private ImageTargetController controllerNamecard;
-        private ImageTargetController controllerIdback;
+        
         private ImageTrackerFrameFilter imageTracker;
         private CameraDeviceFrameSource cameraDevice;
 
@@ -42,18 +41,24 @@ namespace AR
             imageTracker = Session.GetComponentInChildren<ImageTrackerFrameFilter>();
             cameraDevice = Session.GetComponentInChildren<CameraDeviceFrameSource>();
 
+            ImageTargetController firstController = null;
             // Load targets from scene
-            controllerNamecard = GameObject.Find("ImageTarget-namecard").GetComponent<ImageTargetController>();
-            controllerIdback = GameObject.Find("ImageTarget-idback").GetComponent<ImageTargetController>();
-            imageTargetControllers[controllerNamecard] = false;
-            imageTargetControllers[controllerIdback] = false;
-            AddTargetControllerEvents(controllerNamecard);
-            AddTargetControllerEvents(controllerIdback);
+            foreach(var imageTarget in ImageTargetMapping.Instance.Mapping.Keys)
+            {
+                var controllerImageTarget = GameObject.Find(imageTarget).GetComponent<ImageTargetController>();
+                imageTargetControllers[controllerImageTarget] = false;
+                AddTargetControllerEvents(controllerImageTarget);
+                if(firstController == null)
+                {
+                    firstController = controllerImageTarget;
+                }
+            }
+            
 
             // Dynamically load other targets from json
             CreateTargets();
 
-            Session.SpecificTargetCenter = controllerNamecard.gameObject;
+            Session.SpecificTargetCenter = firstController.gameObject;
 
             var launcher = "AllSamplesLauncher";
             if (UnityEngine.Application.CanStreamedLevelBeLoaded(launcher))
@@ -253,6 +258,8 @@ namespace AR
             {
                 Debug.LogFormat("Lost target {{id = {0}, name = {1}}}", controller.Target.runtimeID(), controller.Target.name());
                 ObjectActivationControl.UpdateConfiguration(controller.Target.name(), false);
+                CollisionConfiguration.Instance.RemoveCollision(AR3DObjectStorage.Instance[controller.Target.name()]);
+
             };
             controller.TargetLoad += (Target target, bool status) =>
             {
